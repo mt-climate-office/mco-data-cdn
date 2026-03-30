@@ -1,0 +1,25 @@
+aws_region  = "us-west-2"
+aws_profile = "mco"
+
+origin_buckets = {
+  gridmet = {
+    bucket_name            = "mco-gridmet"
+    bucket_regional_domain = "mco-gridmet.s3.us-west-2.amazonaws.com"
+  }
+  snodas = {
+    bucket_name            = "mco-snodas"
+    bucket_regional_domain = "mco-snodas.s3.us-west-2.amazonaws.com"
+  }
+}
+
+# Volatile paths get short TTLs (default: 1h default, 6h max)
+# volatile_default_ttl    = 3600
+# volatile_max_ttl        = 21600
+# volatile_path_patterns  = ["latest"]
+
+# Archival data gets long TTLs (default: 1d default, 7d max)
+# default_ttl = 86400
+# max_ttl     = 604800
+
+# Custom domain (requires DNS validation — see outputs for records)
+# custom_domain = "data2.climate.umt.edu"
