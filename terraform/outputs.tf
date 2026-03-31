@@ -64,6 +64,7 @@ output "storage_browser_buckets_json" {
     for key, b in var.origin_buckets : {
       label  = key
       bucket = b.bucket_name
+      domain = b.bucket_regional_domain
     }
   ])
 }

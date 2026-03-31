@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and deploy the Storage Browser React app to S3 + CloudFront.
+# Build and deploy the Data Browser React app to S3 + CloudFront.
 # Reads required values from terraform outputs — run `terraform apply` first.
 # Usage: ./scripts/deploy-storage-browser.sh
 set -euo pipefail
@@ -12,12 +12,10 @@ REGION="${AWS_REGION:-us-west-2}"
 
 echo "=== Reading Terraform outputs ==="
 cd "${TF_DIR}"
-IDENTITY_POOL_ID="$(terraform output -raw storage_browser_identity_pool_id)"
 APP_BUCKET="$(terraform output -raw storage_browser_app_bucket)"
 CF_DIST_ID="$(terraform output -raw storage_browser_cloudfront_id)"
 BUCKETS_JSON="$(terraform output -raw storage_browser_buckets_json)"
 
-echo "  Identity Pool : ${IDENTITY_POOL_ID}"
 echo "  App Bucket    : ${APP_BUCKET}"
 echo "  CloudFront ID : ${CF_DIST_ID}"
 echo "  Buckets       : ${BUCKETS_JSON}"
@@ -25,7 +23,6 @@ echo "  Buckets       : ${BUCKETS_JSON}"
 echo "=== Writing .env ==="
 cd "${APP_DIR}"
 cat > .env <<EOF
-VITE_IDENTITY_POOL_ID=${IDENTITY_POOL_ID}
 VITE_S3_BUCKETS=${BUCKETS_JSON}
 VITE_AWS_REGION=${REGION}
 EOF
@@ -52,4 +49,4 @@ aws cloudfront create-invalidation \
 BROWSER_URL="$(cd "${TF_DIR}" && terraform output -raw storage_browser_url)"
 echo ""
 echo "=== Done ==="
-echo "Storage Browser: ${BROWSER_URL}"
+echo "Data Browser: ${BROWSER_URL}"

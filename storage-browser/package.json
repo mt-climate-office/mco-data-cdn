@@ -1,7 +1,7 @@
 {
-  "name": "mco-data-storage-browser",
+  "name": "mco-data-browser",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,9 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@aws-amplify/ui-react": "^6.0.0",
-    "@aws-amplify/ui-react-storage": "^3.0.0",
-    "aws-amplify": "^6.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
