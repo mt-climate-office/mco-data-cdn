@@ -11,10 +11,17 @@ variable "aws_profile" {
 }
 
 variable "origin_buckets" {
-  description = "Map of path prefix to S3 bucket name for each origin"
+  description = <<-EOT
+    Map of path prefix to S3 bucket for each origin. `private = true` serves
+    the bucket through Origin Access Control (signed S3 origin) instead of an
+    unauthenticated custom origin — required for buckets with a public-access
+    block (e.g. mco-mesonet). The bucket's own policy must then allow this
+    distribution's ARN (managed wherever that bucket's policy lives).
+  EOT
   type = map(object({
     bucket_name            = string
     bucket_regional_domain = string
+    private                = optional(bool, false)
   }))
 }
 

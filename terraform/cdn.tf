@@ -33,13 +33,27 @@ resource "aws_cloudfront_cache_policy" "geospatial" {
     query_strings_config {
       query_string_behavior = "whitelist"
       query_strings {
-        items = ["list-type", "prefix", "delimiter", "continuation-token"]
+        # list-type/prefix/delimiter/continuation-token: S3 REST listing
+        # through the CDN. versionId: time-travel GETs against the Mesonet
+        # living archive's tag manifests — it must be BOTH forwarded (S3
+        # serves the pinned version) and in the cache key (a versioned and a
+        # current read of the same path must never share a cache entry).
+        items = ["list-type", "prefix", "delimiter", "continuation-token", "versionId"]
       }
     }
 
     enable_accept_encoding_brotli = true
     enable_accept_encoding_gzip   = true
   }
+}
+
+# ---- Origin Access Control for private S3 origins ---------------------------
+resource "aws_cloudfront_origin_access_control" "private_s3" {
+  name                              = "mco-data-cdn-private-s3"
+  description                       = "Signs origin requests to private origin buckets (public-access-block on)"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 # ---- Cache policy: volatile data (latest/, etc.) ----------------------------
@@ -121,11 +135,12 @@ resource "aws_cloudfront_distribution" "data" {
   price_class         = "PriceClass_100" # North America + Europe
   http_version        = "http2and3"
   default_root_object = "index.html"
-  aliases = var.enable_custom_domain ? [var.custom_domain] : []
+  aliases             = var.enable_custom_domain ? [var.custom_domain] : []
 
-  # Create one origin per data bucket
+  # Create one origin per PUBLIC data bucket (unauthenticated custom origin
+  # against the S3 REST endpoint — these buckets allow public read).
   dynamic "origin" {
-    for_each = var.origin_buckets
+    for_each = { for k, v in var.origin_buckets : k => v if !v.private }
     content {
       domain_name = origin.value.bucket_regional_domain
       origin_id   = origin.key
@@ -136,6 +151,18 @@ resource "aws_cloudfront_distribution" "data" {
         origin_protocol_policy = "https-only"
         origin_ssl_protocols   = ["TLSv1.2"]
       }
+    }
+  }
+
+  # PRIVATE buckets (public-access-block on, e.g. mco-mesonet): CloudFront
+  # signs origin requests via OAC, and the bucket's own policy — managed in
+  # whatever repo owns that bucket — allows this distribution's ARN.
+  dynamic "origin" {
+    for_each = { for k, v in var.origin_buckets : k => v if v.private }
+    content {
+      domain_name              = origin.value.bucket_regional_domain
+      origin_id                = origin.key
+      origin_access_control_id = aws_cloudfront_origin_access_control.private_s3.id
     }
   }
 
