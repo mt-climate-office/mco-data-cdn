@@ -55,7 +55,13 @@ variable "custom_domain" {
 }
 
 variable "enable_custom_domain" {
-  description = "Attach custom domain to CloudFront. Set to true only after ACM cert is validated."
+  description = "Attach custom domain and ACM certificate to CloudFront. Requires acm_certificate_arn."
   type        = bool
   default     = false
+}
+
+variable "acm_certificate_arn" {
+  description = "ARN of the ACM certificate for the custom domain. For university domains, import an InCommon/Sectigo cert via `aws acm import-certificate`."
+  type        = string
+  default     = ""
 }

@@ -16,17 +16,6 @@ output "cdn_origin_urls" {
   }
 }
 
-output "acm_dns_validation_records" {
-  description = "DNS records to give your DNS admin for certificate validation"
-  value = var.custom_domain != "" ? {
-    for dvo in aws_acm_certificate.cdn[0].domain_validation_options : dvo.domain_name => {
-      type  = dvo.resource_record_type
-      name  = dvo.resource_record_name
-      value = dvo.resource_record_value
-    }
-  } : {}
-}
-
 output "cdn_cname_record" {
   description = "CNAME record to point the custom domain to CloudFront"
   value = var.custom_domain != "" ? {

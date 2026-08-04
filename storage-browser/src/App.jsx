@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import FileBrowser from './FileBrowser.jsx'
 
 const BUCKETS = JSON.parse(import.meta.env.VITE_S3_BUCKETS)
@@ -7,6 +7,15 @@ function getInitialTheme() {
   const stored = localStorage.getItem('mco-theme')
   if (stored) return stored
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
+// Parse the URL path into bucket + S3 prefix
+function parseLocation() {
+  const parts = window.location.pathname.replace(/^\//, '').split('/')
+  const label = parts[0]
+  const bucket = BUCKETS.find(b => b.label === label) || null
+  const path = bucket && parts.length > 1 ? parts.slice(1).join('/') : ''
+  return { bucket, path }
 }
 
 const SunIcon = () => (
@@ -20,16 +29,40 @@ const MoonIcon = () => (
 
 export default function App() {
   const [theme, setTheme] = useState(getInitialTheme)
-  const [activeBucket, setActiveBucket] = useState(null)
-  const [path, setPath] = useState('')
+  const [activeBucket, setActiveBucket] = useState(() => parseLocation().bucket)
+  const [path, setPath] = useState(() => parseLocation().path)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('mco-theme', theme)
   }, [theme])
 
+  // Sync URL when navigating
+  const navigate = useCallback((bucket, newPath) => {
+    setActiveBucket(bucket)
+    setPath(newPath)
+    const url = bucket ? `/${bucket.label}/${newPath}` : '/'
+    window.history.pushState(null, '', url)
+  }, [])
+
+  const goHome = useCallback(() => navigate(null, ''), [navigate])
+  const selectBucket = useCallback((b) => navigate(b, ''), [navigate])
+  const navigatePath = useCallback((newPath) => {
+    navigate(activeBucket, newPath)
+  }, [navigate, activeBucket])
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const onPopState = () => {
+      const { bucket, path: p } = parseLocation()
+      setActiveBucket(bucket)
+      setPath(p)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
-  const goHome = () => { setActiveBucket(null); setPath('') }
 
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -42,8 +75,8 @@ export default function App() {
         </a>
         <div className="mco-navbar-divider" />
         <div className="mco-navbar-brand">
-          <span className="mco-navbar-title">Montana Climate Office</span>
-          <span className="mco-navbar-subtitle">Data Browser</span>
+          <span className="mco-navbar-title">MCO Data Browser</span>
+          <span className="mco-navbar-subtitle">A service of the Montana Climate Office</span>
         </div>
         <button className="mco-theme-toggle" onClick={toggleTheme}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
@@ -73,7 +106,7 @@ export default function App() {
                       <div className="name-cell">
                         <FolderIcon />
                         <button className="folder-link"
-                          onClick={() => { setActiveBucket(b); setPath('') }}>
+                          onClick={() => selectBucket(b)}>
                           {b.label}
                         </button>
                       </div>
@@ -89,7 +122,7 @@ export default function App() {
           <FileBrowser
             bucket={activeBucket}
             path={path}
-            onNavigate={setPath}
+            onNavigate={navigatePath}
             onHome={goHome}
           />
         )}

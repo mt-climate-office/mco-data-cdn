@@ -31,7 +31,7 @@ function getTagText(parent, tag) {
   return el ? el.textContent : ''
 }
 
-// List objects in a public S3 bucket via the REST API (no auth needed)
+// List objects in a public S3 bucket via the REST API
 async function listS3(bucketDomain, prefix, continuationToken) {
   const params = new URLSearchParams({ 'list-type': '2', 'delimiter': '/' })
   if (prefix) params.set('prefix', prefix)
@@ -116,26 +116,25 @@ export default function FileBrowser({ bucket, path, onNavigate, onHome }) {
     <>
       <div className="breadcrumb">
         <button onClick={onHome}>/</button>
-        <span className="breadcrumb-sep">/</span>
         {segments.length === 0 ? (
           <span className="breadcrumb-current">{bucket.label}</span>
         ) : (
-          <button onClick={() => onNavigate('')}>{bucket.label}</button>
+          <>
+            <button onClick={() => onNavigate('')}>{bucket.label}</button>
+            {segments.map((seg, i) => {
+              const segPath = segments.slice(0, i + 1).join('/') + '/'
+              const isLast = i === segments.length - 1
+              return [
+                <span key={`sep-${i}`} className="breadcrumb-sep">/</span>,
+                isLast ? (
+                  <span key={segPath} className="breadcrumb-current">{seg}</span>
+                ) : (
+                  <button key={segPath} onClick={() => onNavigate(segPath)}>{seg}</button>
+                )
+              ]
+            })}
+          </>
         )}
-        {segments.map((seg, i) => {
-          const segPath = segments.slice(0, i + 1).join('/') + '/'
-          const isLast = i === segments.length - 1
-          return (
-            <span key={segPath}>
-              <span className="breadcrumb-sep">/</span>
-              {isLast ? (
-                <span className="breadcrumb-current">{seg}</span>
-              ) : (
-                <button onClick={() => onNavigate(segPath)}>{seg}</button>
-              )}
-            </span>
-          )
-        })}
       </div>
 
       {loading ? (

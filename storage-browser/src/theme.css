@@ -84,11 +84,12 @@ a:hover { color: var(--mco-accent-light); text-decoration: underline; }
   display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1;
 }
 .mco-navbar-title {
-  font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--mco-text-muted); line-height: 1.2;
+  font-size: 0.65rem; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--mco-text-muted); white-space: nowrap; line-height: 1.2;
 }
 .mco-navbar-subtitle {
-  font-size: 0.82rem; font-weight: 600; color: var(--mco-text-primary); line-height: 1.2;
+  font-size: 0.55rem; font-weight: 400; font-style: italic;
+  letter-spacing: 0.04em; color: var(--mco-text-dim); white-space: nowrap; line-height: 1.2;
 }
 
 /* ---- Theme toggle ------------------------------------------------------- */

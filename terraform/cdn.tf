@@ -31,7 +31,10 @@ resource "aws_cloudfront_cache_policy" "geospatial" {
     }
 
     query_strings_config {
-      query_string_behavior = "none"
+      query_string_behavior = "whitelist"
+      query_strings {
+        items = ["list-type", "prefix", "delimiter", "continuation-token"]
+      }
     }
 
     enable_accept_encoding_brotli = true
@@ -65,7 +68,10 @@ resource "aws_cloudfront_cache_policy" "volatile" {
     }
 
     query_strings_config {
-      query_string_behavior = "none"
+      query_string_behavior = "whitelist"
+      query_strings {
+        items = ["list-type", "prefix", "delimiter", "continuation-token"]
+      }
     }
 
     enable_accept_encoding_brotli = true
@@ -115,9 +121,6 @@ resource "aws_cloudfront_distribution" "data" {
   price_class         = "PriceClass_100" # North America + Europe
   http_version        = "http2and3"
   default_root_object = "index.html"
-  # Set aliases only after the ACM cert has been validated and var.enable_custom_domain is true.
-  # Step 1: apply with enable_custom_domain = false to create the cert and get DNS records.
-  # Step 2: after DNS validation, set enable_custom_domain = true and apply again.
   aliases = var.enable_custom_domain ? [var.custom_domain] : []
 
   # Create one origin per data bucket
@@ -167,17 +170,10 @@ resource "aws_cloudfront_distribution" "data" {
     max_ttl     = 86400
   }
 
-  # SPA routing: serve index.html for unknown paths
-  custom_error_response {
-    error_code         = 403
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
-  custom_error_response {
-    error_code         = 404
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
+  # Note: no custom_error_response blocks here. The S3 website hosting for the
+  # storage browser app already serves index.html for 404s (via error_document).
+  # Distribution-level error responses would intercept errors from data origins
+  # too, breaking S3 ListBucket and proper 404s for missing data files.
 
   # Volatile paths first (e.g. /gridmet/latest/*, /snodas/latest/*) — short TTL.
   # These MUST come before the general /<key>/* behaviors because CloudFront
@@ -240,7 +236,7 @@ resource "aws_cloudfront_distribution" "data" {
   dynamic "viewer_certificate" {
     for_each = var.enable_custom_domain ? [1] : []
     content {
-      acm_certificate_arn      = aws_acm_certificate.cdn[0].arn
+      acm_certificate_arn      = var.acm_certificate_arn
       ssl_support_method       = "sni-only"
       minimum_protocol_version = "TLSv1.2_2021"
     }
@@ -260,17 +256,50 @@ resource "aws_cloudfront_distribution" "data" {
 # CloudFront sends the full URI (e.g. /snodas/cogs/file.tif) to the origin,
 # but S3 expects just the object key (cogs/file.tif). This function strips
 # the first path segment.
+#
+# For "directory" requests (no file extension), it returns a small HTML loader
+# that fetches the SPA from /index.html. The SPA reads window.location.pathname
+# and renders the file browser for that path.
 resource "aws_cloudfront_function" "strip_prefix" {
   name    = "mco-strip-origin-prefix"
   runtime = "cloudfront-js-2.0"
-  comment = "Strip the first path segment (origin prefix) before forwarding to S3"
+  comment = "Strip origin prefix; serve SPA loader for directory paths"
   publish = true
 
   code = <<-JS
     function handler(event) {
       var request = event.request;
-      // Remove the first path segment: /snodas/cogs/file.tif -> /cogs/file.tif
-      request.uri = request.uri.replace(/^\/[^\/]+/, '');
+      var uri = request.uri;
+
+      // Strip the first path segment: /snodas/cogs/file.tif -> /cogs/file.tif
+      var stripped = uri.replace(/^\/[^\/]+/, '') || '/';
+
+      // If this is an S3 ListObjectsV2 call, always forward to S3
+      if (request.querystring['list-type']) {
+        request.uri = stripped;
+        return request;
+      }
+
+      // Check if this looks like a directory (no file extension in last segment).
+      // Directory paths like /snodas/cogs/ should serve the SPA, not hit S3.
+      var segments = stripped.split('/').filter(function(s) { return s; });
+      var lastSegment = segments[segments.length - 1];
+      if (!lastSegment || lastSegment.indexOf('.') === -1) {
+        return {
+          statusCode: 200,
+          statusDescription: 'OK',
+          headers: {
+            'content-type': { value: 'text/html' },
+            'cache-control': { value: 'no-cache' }
+          },
+          body: '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' +
+                '<script>fetch("/index.html").then(function(r){return r.text()})' +
+                '.then(function(h){document.open();document.write(h);document.close();})</script>' +
+                '</body></html>'
+        };
+      }
+
+      request.uri = stripped;
       return request;
     }
   JS

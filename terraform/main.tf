@@ -14,13 +14,6 @@ provider "aws" {
   profile = var.aws_profile
 }
 
-# CloudFront requires ACM certs in us-east-1
-provider "aws" {
-  alias   = "us_east_1"
-  region  = "us-east-1"
-  profile = var.aws_profile
-}
-
 locals {
   common_tags = {
     Project   = "mco-data-cdn"
