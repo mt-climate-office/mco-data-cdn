@@ -207,6 +207,30 @@ resource "aws_cloudfront_distribution" "data" {
   # Distribution-level error responses would intercept errors from data origins
   # too, breaking S3 ListBucket and proper 404s for missing data files.
 
+  # Exact volatile paths (e.g. /mesonet/photos/manifest.parquet) — a single
+  # object rewritten many times a day, so it must not inherit the archival TTL.
+  # Declared before both blocks below: these are the most specific patterns, and
+  # /<key>/* would otherwise swallow them.
+  dynamic "ordered_cache_behavior" {
+    for_each = { for p in var.volatile_exact_paths : p => split("/", trimprefix(p, "/"))[0] }
+    content {
+      path_pattern           = ordered_cache_behavior.key
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD"]
+      target_origin_id       = ordered_cache_behavior.value
+      viewer_protocol_policy = "redirect-to-https"
+      compress               = true
+
+      cache_policy_id            = aws_cloudfront_cache_policy.volatile.id
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.cors.id
+
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.strip_prefix.arn
+      }
+    }
+  }
+
   # Volatile paths first (e.g. /gridmet/latest/*, /snodas/latest/*) — short TTL.
   # These MUST come before the general /<key>/* behaviors because CloudFront
   # evaluates ordered_cache_behavior entries in order, most-specific first.

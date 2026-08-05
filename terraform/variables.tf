@@ -55,6 +55,20 @@ variable "volatile_path_patterns" {
   default     = ["latest"]
 }
 
+variable "volatile_exact_paths" {
+  description = <<-EOT
+    Exact distribution paths that are rewritten frequently and must not inherit
+    the archival TTL — e.g. a manifest regenerated many times a day. Each gets
+    the short-TTL volatile cache policy.
+
+    Unlike volatile_path_patterns (which are suffixes applied within every
+    origin prefix), these are full paths and must include the leading
+    /<origin_key>/ prefix.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "custom_domain" {
   description = "Custom domain name for the CDN (e.g. data2.climate.umt.edu)"
   type        = string
