@@ -129,13 +129,18 @@ resource "aws_cloudfront_response_headers_policy" "cors" {
 
 # ---- CloudFront distribution ------------------------------------------------
 resource "aws_cloudfront_distribution" "data" {
-  comment             = "MCO data CDN"
-  enabled             = true
-  is_ipv6_enabled     = true
-  price_class         = "PriceClass_100" # North America + Europe
-  http_version        = "http2and3"
-  default_root_object = "index.html"
-  aliases             = var.enable_custom_domain ? [var.custom_domain] : []
+  comment         = "MCO data CDN"
+  enabled         = true
+  is_ipv6_enabled = true
+  price_class     = "PriceClass_100" # North America + Europe
+  http_version    = "http2and3"
+  # NO default_root_object, deliberately. It rewrites ANY request whose uri is
+  # "/" — including the strip_prefix function's forwarded S3 ListObjectsV2
+  # calls for private origins (GET /?list-type=2 became GET /index.html →
+  # NoSuchKey, breaking the storage browser's listing of mco-mesonet). The SPA
+  # doesn't need it: its origin is an S3 *website* endpoint, which resolves
+  # index.html for "/" on its own.
+  aliases = var.enable_custom_domain ? [var.custom_domain] : []
 
   # Create one origin per PUBLIC data bucket (unauthenticated custom origin
   # against the S3 REST endpoint — these buckets allow public read).
