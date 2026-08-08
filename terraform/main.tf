@@ -7,6 +7,16 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  # Shared state bucket. Auth comes from the environment (AWS_PROFILE=mco
+  # locally, OIDC role credentials in CI) — never hardcode a profile here.
+  backend "s3" {
+    bucket       = "mco-terraform-state"
+    key          = "mco-data-cdn/terraform.tfstate"
+    region       = "us-west-2"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {
