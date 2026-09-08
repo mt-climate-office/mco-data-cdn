@@ -26,6 +26,13 @@ resource "aws_cloudfront_cache_policy" "geospatial" {
           "Origin",
           "Access-Control-Request-Method",
           "Access-Control-Request-Headers",
+          # Set by the strip_prefix function to the origin's path prefix. That
+          # function rewrites the URI *before* the cache lookup, so /gridmet/x
+          # and /snodas/x both become /x and would otherwise share one cache
+          # entry across two buckets — the cache key covers the distribution
+          # and URI, not the cache behavior or origin. This header keeps the
+          # origins apart.
+          "x-mco-origin",
         ]
       }
     }
@@ -77,6 +84,13 @@ resource "aws_cloudfront_cache_policy" "volatile" {
           "Origin",
           "Access-Control-Request-Method",
           "Access-Control-Request-Headers",
+          # Set by the strip_prefix function to the origin's path prefix. That
+          # function rewrites the URI *before* the cache lookup, so /gridmet/x
+          # and /snodas/x both become /x and would otherwise share one cache
+          # entry across two buckets — the cache key covers the distribution
+          # and URI, not the cache behavior or origin. This header keeps the
+          # origins apart.
+          "x-mco-origin",
         ]
       }
     }
@@ -326,6 +340,13 @@ resource "aws_cloudfront_function" "strip_prefix" {
     function handler(event) {
       var request = event.request;
       var uri = request.uri;
+
+      // The origin prefix (e.g. "snodas"), carried in a header that both cache
+      // policies include in the cache key. The URI is stripped below before
+      // the cache lookup happens, so without this every origin's /raw/... maps
+      // to the same cache entry.
+      var prefix = uri.split('/')[1] || '';
+      request.headers['x-mco-origin'] = { value: prefix };
 
       // Strip the first path segment: /snodas/cogs/file.tif -> /cogs/file.tif
       var stripped = uri.replace(/^\/[^\/]+/, '') || '/';

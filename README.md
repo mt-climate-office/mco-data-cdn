@@ -17,13 +17,19 @@ A CloudFront Function strips the path prefix before forwarding to S3, so `/snoda
 
 A React SPA served at the CDN root provides a web-based file browser for all origin buckets. It uses a Cognito Identity Pool for unauthenticated guest access to S3 `ListBucket`/`GetObject`. Source is in `storage-browser/`.
 
-### Features
+### CDN features
 
 - **Range request support** — cached by `Range` header for efficient COG access
 - **CORS** — open to all origins, exposes `Content-Range`, `Accept-Ranges`, `ETag`
 - **HTTP/2 + HTTP/3** — modern transport
 - **Compression** — Brotli and gzip
 - **Tiered caching** — short TTL for volatile paths (e.g. `latest/`), long TTL for archival data
+- **Per-origin cache keys** — the prefix-stripping CloudFront function runs
+  before the cache lookup, so `/gridmet/raw/x` and `/snodas/raw/x` both become
+  `/raw/x`. The cache key covers the distribution and URI but not the cache
+  behavior or origin, so the function stamps an `x-mco-origin` header that both
+  cache policies include in the key. Without it, two buckets sharing a key path
+  share one cached object.
 
 ## Setup
 
