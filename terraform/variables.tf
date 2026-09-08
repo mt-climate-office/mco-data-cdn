@@ -70,6 +70,17 @@ variable "volatile_exact_paths" {
   default     = []
 }
 
+variable "listing_ttl" {
+  description = <<-EOT
+    Cache TTL in seconds for S3 ListObjectsV2 responses served through the CDN
+    (private origins only). Short, so a new prefix appears in the data browser
+    almost immediately, but non-zero so a recursive walk of a large tree does
+    not hammer S3.
+  EOT
+  type        = number
+  default     = 60
+}
+
 variable "custom_domain" {
   description = "Custom domain name for the CDN (e.g. data2.climate.umt.edu)"
   type        = string

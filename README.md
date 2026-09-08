@@ -22,9 +22,12 @@ the app bucket, and invalidates the CDN.
 
 Listings come straight from S3's `ListObjectsV2` REST API — no SDK, no
 credentials. Public origin buckets answer directly (their CORS rule allows this
-site's origin), so listings are never stale. The private origin has no public S3
-endpoint, so it is listed through the CDN, which forwards `?list-type=2` to S3
-over OAC. Which endpoint each bucket uses comes from the
+site's origin), so their listings are never stale. The private origin has no
+public S3 endpoint, so it is listed through the CDN, which forwards
+`?list-type=2` to S3 over OAC. Those listings *are* cached: an exact-path
+behavior on `/<key>/` gives them their own short TTL (`listing_ttl`, default
+60 s) instead of the one-day archival TTL, so a new prefix shows up within a
+minute. Which endpoint each bucket uses comes from the
 `storage_browser_buckets_json` Terraform output.
 
 What it does:

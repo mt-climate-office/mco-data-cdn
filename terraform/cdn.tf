@@ -107,6 +107,45 @@ resource "aws_cloudfront_cache_policy" "volatile" {
   }
 }
 
+# ---- Cache policy: S3 listings through the CDN ------------------------------
+# Private origins have no public S3 endpoint, so the storage browser sends
+# ListObjectsV2 (?list-type=2) to /<key>/ on the CDN. S3 returns no
+# Cache-Control on listings, so under the archival policy a listing is cached
+# for default_ttl — a whole day — and a new prefix stays invisible until it
+# expires. This policy keeps the same query-string whitelist (the parameters
+# must still be forwarded) but with a TTL short enough that a person clicking
+# around never notices, while still absorbing a recursive walk's page burst.
+resource "aws_cloudfront_cache_policy" "listing" {
+  name        = "mco-listing-cache-policy"
+  comment     = "Short-TTL cache policy for S3 ListObjectsV2 responses served through the CDN"
+  default_ttl = var.listing_ttl
+  max_ttl     = var.listing_ttl
+  min_ttl     = 0
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    cookies_config {
+      cookie_behavior = "none"
+    }
+
+    headers_config {
+      header_behavior = "whitelist"
+      headers {
+        items = ["Origin", "x-mco-origin"]
+      }
+    }
+
+    query_strings_config {
+      query_string_behavior = "whitelist"
+      query_strings {
+        items = ["list-type", "prefix", "delimiter", "continuation-token"]
+      }
+    }
+
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+  }
+}
+
 # ---- Response headers policy: CORS ------------------------------------------
 resource "aws_cloudfront_response_headers_policy" "cors" {
   name    = "mco-data-cors-policy"
@@ -220,6 +259,32 @@ resource "aws_cloudfront_distribution" "data" {
   # storage browser app already serves index.html for 404s (via error_document).
   # Distribution-level error responses would intercept errors from data origins
   # too, breaking S3 ListBucket and proper 404s for missing data files.
+
+  # Listings for private origins: the browser sends ListObjectsV2 to the exact
+  # path /<key>/ with the parameters in the query string. This is the most
+  # specific pattern of all, so it is declared first. Directory requests for
+  # /<key>/ land here too; the strip_prefix function answers those with the SPA
+  # loader regardless of behavior. Public origins are listed straight from S3,
+  # never through the CDN, so they need no such behavior.
+  dynamic "ordered_cache_behavior" {
+    for_each = { for k, v in var.origin_buckets : k => v if v.private }
+    content {
+      path_pattern           = "/${ordered_cache_behavior.key}/"
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD"]
+      target_origin_id       = ordered_cache_behavior.key
+      viewer_protocol_policy = "redirect-to-https"
+      compress               = true
+
+      cache_policy_id            = aws_cloudfront_cache_policy.listing.id
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.cors.id
+
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.strip_prefix.arn
+      }
+    }
+  }
 
   # Exact volatile paths (e.g. /mesonet/photos/manifest.parquet) — a single
   # object rewritten many times a day, so it must not inherit the archival TTL.
