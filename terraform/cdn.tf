@@ -369,7 +369,14 @@ resource "aws_cloudfront_function" "strip_prefix" {
             'content-type': { value: 'text/html' },
             'cache-control': { value: 'no-cache' }
           },
-          body: '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' +
+          body: '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+                // The loader is a real document in its own right: with no
+                // declared icon the browser probes /favicon.ico on every
+                // directory URL, and with no title the tab shows the raw path
+                // until index.html lands.
+                '<title>MCO Data Browser</title>' +
+                '<link rel="icon" href="/favicon.ico" sizes="any">' +
+                '</head><body>' +
                 '<script>fetch("/index.html").then(function(r){return r.text()})' +
                 '.then(function(h){document.open();document.write(h);document.close();})</script>' +
                 '</body></html>'
