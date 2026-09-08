@@ -3,10 +3,14 @@ import FileBrowser from './FileBrowser.jsx'
 import ShortcutsHelp from './components/ShortcutsHelp.jsx'
 import { FolderIcon, SunIcon, MoonIcon } from './components/Icons.jsx'
 import { decodeSafe, encodeKey } from './lib/s3.js'
+import { defaultSortDir } from './lib/format.js'
 
 const BUCKETS = JSON.parse(import.meta.env.VITE_S3_BUCKETS)
 
-const DEFAULT_UI = { query: '', sort: { by: 'name', dir: 1 }, view: 'list', recursive: false }
+// Newest changes on top by default: the archives grow daily, and what just
+// landed is usually what someone came to look at.
+const DEFAULT_SORT = { by: 'date', dir: defaultSortDir('date') }
+const DEFAULT_UI = { query: '', sort: DEFAULT_SORT, view: 'list', recursive: false }
 
 function getInitialTheme() {
   const stored = localStorage.getItem('mco-theme')
@@ -23,13 +27,16 @@ function parseLocation() {
   const path = rest && !rest.endsWith('/') ? `${rest}/` : rest
 
   const params = new URLSearchParams(window.location.search)
-  const by = params.get('sort')
+  const by = ['name', 'kind', 'size', 'date'].includes(params.get('sort'))
+    ? params.get('sort') : DEFAULT_SORT.by
+  // An absent `dir` means the column's natural direction, so links that only
+  // name a column (e.g. ?sort=size) keep meaning what they always did.
+  const dir = params.get('dir') === 'asc' ? 1
+    : params.get('dir') === 'desc' ? -1
+      : defaultSortDir(by)
   const ui = {
     query: params.get('q') || '',
-    sort: {
-      by: ['name', 'kind', 'size', 'date'].includes(by) ? by : 'name',
-      dir: params.get('dir') === 'desc' ? -1 : 1,
-    },
+    sort: { by, dir },
     view: params.get('view') === 'grid' ? 'grid'
       : params.get('view') === 'list' ? 'list'
         : localStorage.getItem('mco-view') === 'grid' ? 'grid' : 'list',
@@ -41,8 +48,8 @@ function parseLocation() {
 function uiToQuery(ui) {
   const params = new URLSearchParams()
   if (ui.query) params.set('q', ui.query)
-  if (ui.sort.by !== 'name') params.set('sort', ui.sort.by)
-  if (ui.sort.dir === -1) params.set('dir', 'desc')
+  if (ui.sort.by !== DEFAULT_SORT.by) params.set('sort', ui.sort.by)
+  if (ui.sort.dir !== defaultSortDir(ui.sort.by)) params.set('dir', ui.sort.dir === 1 ? 'asc' : 'desc')
   if (ui.view !== 'list') params.set('view', ui.view)
   if (ui.recursive) params.set('deep', '1')
   const s = params.toString()

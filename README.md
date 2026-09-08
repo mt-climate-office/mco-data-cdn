@@ -32,8 +32,9 @@ minute. Which endpoint each bucket uses comes from the
 
 What it does:
 
-- **Sort** by name, kind, size, or modified time — folders always lead; names
-  collate naturally, so `part-2` precedes `part-10`
+- **Sort** by name, kind, size, or modified time — newest first by default, so
+  what just landed is on top; folders always lead; names collate naturally, so
+  `part-2` precedes `part-10`
 - **Filter** the current folder as you type, or tick **Search subfolders** to
   walk every prefix below it (streaming, with a live count and a Stop button)
 - **Preview** in place: Markdown, CSV/TSV as a table, pretty-printed JSON, plain

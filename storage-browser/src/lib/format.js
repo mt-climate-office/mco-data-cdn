@@ -105,3 +105,8 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'bas
 export function compareNames(a, b) {
   return collator.compare(a, b)
 }
+
+// Newest first is what people want from a modified-time sort; everything else
+// reads naturally ascending. Used for the default view and for a column's
+// first click.
+export const defaultSortDir = by => (by === 'date' ? -1 : 1)

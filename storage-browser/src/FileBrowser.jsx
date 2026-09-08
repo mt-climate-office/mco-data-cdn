@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { listAll, fileUrl, s3Uri, decodeSafe, encodeKey } from './lib/s3.js'
 import {
   typeOf, compareNames, pluralize,
-  TEXT_PREVIEW, IMAGE_PREVIEW, NATIVE_VIEW,
+  TEXT_PREVIEW, IMAGE_PREVIEW, NATIVE_VIEW, defaultSortDir,
 } from './lib/format.js'
 import { renderMarkdown } from './lib/markdown.js'
 import Toolbar from './components/Toolbar.jsx'
@@ -140,7 +140,11 @@ export default function FileBrowser({
       // Folders always lead, whichever way the column sorts.
       if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
       if (by === 'size') return (a.size - b.size) * dir || compareNames(a.name, b.name)
-      if (by === 'date') return (a.modified < b.modified ? -1 : a.modified > b.modified ? 1 : 0) * dir
+      if (by === 'date') {
+        // Folders carry no date, so they (and same-second files) fall back to name.
+        const cmp = a.modified < b.modified ? -1 : a.modified > b.modified ? 1 : 0
+        return (cmp * dir) || compareNames(decodeSafe(a.name), decodeSafe(b.name))
+      }
       if (by === 'kind') {
         const ka = typeOf(a.name).label
         const kb = typeOf(b.name).label
@@ -194,7 +198,7 @@ export default function FileBrowser({
   const onSort = useCallback(by => {
     setUiState(s => ({
       ...s,
-      sort: { by, dir: s.sort.by === by ? -s.sort.dir : 1 },
+      sort: { by, dir: s.sort.by === by ? -s.sort.dir : defaultSortDir(by) },
     }))
   }, [setUiState])
 
