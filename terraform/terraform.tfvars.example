@@ -1,14 +1,19 @@
 aws_region  = "us-west-2"
 aws_profile = "mco"
 
+# `description` is optional; the data browser shows it on the landing page.
+# `private = true` serves a bucket over OAC (required when the bucket has a
+# public-access block) and makes the browser list it through the CDN.
 origin_buckets = {
   gridmet = {
     bucket_name            = "mco-gridmet"
     bucket_regional_domain = "mco-gridmet.s3.us-west-2.amazonaws.com"
+    description            = "GridMET climate and drought grids as COGs"
   }
   snodas = {
     bucket_name            = "mco-snodas"
     bucket_regional_domain = "mco-snodas.s3.us-west-2.amazonaws.com"
+    description            = "SNODAS snow water equivalent COGs and summaries"
   }
 }
 

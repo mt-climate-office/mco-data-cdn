@@ -10,12 +10,55 @@ A single CloudFront distribution fronts multiple S3 origin buckets using path-ba
 |-------------|-----------|------|
 | `/gridmet/*` | `mco-gridmet` | GridMET drought & climate COGs |
 | `/snodas/*` | `mco-snodas` | SNODAS SWE COGs & Parquet |
+| `/mesonet/*` | `mco-mesonet` | Mesonet Parquet archive, station photos, air quality (private origin, via OAC) |
 
 A CloudFront Function strips the path prefix before forwarding to S3, so `/snodas/cogs/file.tif` resolves to `s3://mco-snodas/cogs/file.tif`. Directory-like paths (no file extension) serve the storage browser SPA instead of hitting S3.
 
-### Storage browser
+### Data browser
 
-A React SPA served at the CDN root provides a web-based file browser for all origin buckets. It uses a Cognito Identity Pool for unauthenticated guest access to S3 `ListBucket`/`GetObject`. Source is in `storage-browser/`.
+A React SPA served at the CDN root browses every origin bucket. Source is in
+`storage-browser/`; `./scripts/deploy-storage-browser.sh` builds it, syncs it to
+the app bucket, and invalidates the CDN.
+
+Listings come straight from S3's `ListObjectsV2` REST API — no SDK, no
+credentials. Public origin buckets answer directly (their CORS rule allows this
+site's origin), so listings are never stale. The private origin has no public S3
+endpoint, so it is listed through the CDN, which forwards `?list-type=2` to S3
+over OAC. Which endpoint each bucket uses comes from the
+`storage_browser_buckets_json` Terraform output.
+
+What it does:
+
+- **Sort** by name, kind, size, or modified time — folders always lead; names
+  collate naturally, so `part-2` precedes `part-10`
+- **Filter** the current folder as you type, or tick **Search subfolders** to
+  walk every prefix below it (streaming, with a live count and a Stop button)
+- **Preview** in place: Markdown, CSV/TSV as a table, pretty-printed JSON, plain
+  text, and images — fetched as a ranged request, so opening a preview of a file
+  in a multi-GB tree costs 512 KB
+- **README rendering** — a folder's `README.md` renders under its listing
+- **Copy links** per file or for a whole folder, as an HTTPS URL, an `s3://`
+  URI, or a GDAL `/vsicurl/` path; save a folder's URLs as `urls.txt`
+- **List or grid view**, virtualized — the SNODAS COG tree lists 8,000+ dated
+  folders without dropping a frame
+- **Linkable state** — the folder is the URL path; filter, sort, view mode, and
+  subfolder search ride in the query string
+- **Keyboard driven** — `/` to filter, `j`/`k` to move, `Enter` to open, `u` to
+  go up, `v` for view, `r` for recursive, `?` for the full list
+- Light and dark themes, and a layout that works down to phone width
+
+#### Local development
+
+```bash
+cd storage-browser
+npm install
+npm run dev
+```
+
+The buckets' CORS rules only allow the production hosts, so `vite dev` proxies
+listings through `/__s3/<bucket>` (see `vite.config.js`); file links point at
+`VITE_CDN_BASE`. Both come from `.env`, which the deploy script regenerates from
+Terraform outputs.
 
 ### CDN features
 

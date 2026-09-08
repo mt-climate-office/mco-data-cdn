@@ -15,9 +15,11 @@ cd "${TF_DIR}"
 APP_BUCKET="$(terraform output -raw storage_browser_app_bucket)"
 CF_DIST_ID="$(terraform output -raw storage_browser_cloudfront_id)"
 BUCKETS_JSON="$(terraform output -raw storage_browser_buckets_json)"
+CDN_BASE="$(terraform output -raw storage_browser_cdn_base)"
 
 echo "  App Bucket    : ${APP_BUCKET}"
 echo "  CloudFront ID : ${CF_DIST_ID}"
+echo "  CDN base      : ${CDN_BASE}"
 echo "  Buckets       : ${BUCKETS_JSON}"
 
 echo "=== Writing .env ==="
@@ -25,6 +27,7 @@ cd "${APP_DIR}"
 cat > .env <<EOF
 VITE_S3_BUCKETS=${BUCKETS_JSON}
 VITE_AWS_REGION=${REGION}
+VITE_CDN_BASE=${CDN_BASE}
 EOF
 
 echo "=== Installing dependencies ==="

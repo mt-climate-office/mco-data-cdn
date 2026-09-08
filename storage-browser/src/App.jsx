@@ -1,7 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import FileBrowser from './FileBrowser.jsx'
+import ShortcutsHelp from './components/ShortcutsHelp.jsx'
+import { FolderIcon, SunIcon, MoonIcon } from './components/Icons.jsx'
+import { decodeSafe, encodeKey } from './lib/s3.js'
 
 const BUCKETS = JSON.parse(import.meta.env.VITE_S3_BUCKETS)
+
+const DEFAULT_UI = { query: '', sort: { by: 'name', dir: 1 }, view: 'list', recursive: false }
 
 function getInitialTheme() {
   const stored = localStorage.getItem('mco-theme')
@@ -9,75 +14,121 @@ function getInitialTheme() {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
-// Parse the URL path into bucket + S3 prefix
+// The path is the route: /<bucket>/<prefix...>/. Everything the toolbar
+// controls lives in the query string so a filtered, sorted view is linkable.
 function parseLocation() {
-  const parts = window.location.pathname.replace(/^\//, '').split('/')
-  const label = parts[0]
-  const bucket = BUCKETS.find(b => b.label === label) || null
-  const path = bucket && parts.length > 1 ? parts.slice(1).join('/') : ''
-  return { bucket, path }
+  const parts = decodeSafe(window.location.pathname).replace(/^\//, '').split('/')
+  const bucket = BUCKETS.find(b => b.label === parts[0]) || null
+  const rest = bucket && parts.length > 1 ? parts.slice(1).join('/') : ''
+  const path = rest && !rest.endsWith('/') ? `${rest}/` : rest
+
+  const params = new URLSearchParams(window.location.search)
+  const by = params.get('sort')
+  const ui = {
+    query: params.get('q') || '',
+    sort: {
+      by: ['name', 'kind', 'size', 'date'].includes(by) ? by : 'name',
+      dir: params.get('dir') === 'desc' ? -1 : 1,
+    },
+    view: params.get('view') === 'grid' ? 'grid'
+      : params.get('view') === 'list' ? 'list'
+        : localStorage.getItem('mco-view') === 'grid' ? 'grid' : 'list',
+    recursive: params.get('deep') === '1',
+  }
+  return { bucket, path, ui }
 }
 
-const SunIcon = () => (
-  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" />
-    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" /></svg>
-)
-const MoonIcon = () => (
-  <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-)
+function uiToQuery(ui) {
+  const params = new URLSearchParams()
+  if (ui.query) params.set('q', ui.query)
+  if (ui.sort.by !== 'name') params.set('sort', ui.sort.by)
+  if (ui.sort.dir === -1) params.set('dir', 'desc')
+  if (ui.view !== 'list') params.set('view', ui.view)
+  if (ui.recursive) params.set('deep', '1')
+  const s = params.toString()
+  return s ? `?${s}` : ''
+}
 
 export default function App() {
+  const initial = useMemo(parseLocation, [])
   const [theme, setTheme] = useState(getInitialTheme)
-  const [activeBucket, setActiveBucket] = useState(() => parseLocation().bucket)
-  const [path, setPath] = useState(() => parseLocation().path)
+  const [bucket, setBucket] = useState(initial.bucket)
+  const [path, setPath] = useState(initial.path)
+  const [ui, setUi] = useState(initial.ui)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('mco-theme', theme)
   }, [theme])
 
-  // Sync URL when navigating
-  const navigate = useCallback((bucket, newPath) => {
-    setActiveBucket(bucket)
-    setPath(newPath)
-    const url = bucket ? `/${bucket.label}/${newPath}` : '/'
+  useEffect(() => { localStorage.setItem('mco-view', ui.view) }, [ui.view])
+
+  useEffect(() => {
+    document.title = bucket
+      ? `${bucket.label}/${decodeSafe(path)} — MCO Data`
+      : 'MCO Data Browser'
+  }, [bucket, path])
+
+  // Toolbar state edits replace the history entry; navigation pushes one.
+  useEffect(() => {
+    const url = (bucket ? `/${bucket.label}/${encodeKey(path)}` : '/') + uiToQuery(ui)
+    if (url !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, '', url)
+    }
+  }, [ui, bucket, path])
+
+  const navigate = useCallback((nextBucket, nextPath, nextUi) => {
+    const ui2 = nextUi ?? { ...DEFAULT_UI, view: ui.view }
+    setBucket(nextBucket)
+    setPath(nextPath)
+    setUi(ui2)
+    const url = (nextBucket ? `/${nextBucket.label}/${encodeKey(nextPath)}` : '/') + uiToQuery(ui2)
     window.history.pushState(null, '', url)
-  }, [])
+  }, [ui.view])
 
   const goHome = useCallback(() => navigate(null, ''), [navigate])
-  const selectBucket = useCallback((b) => navigate(b, ''), [navigate])
-  const navigatePath = useCallback((newPath) => {
-    navigate(activeBucket, newPath)
-  }, [navigate, activeBucket])
+  const navigatePath = useCallback(p => navigate(bucket, p), [navigate, bucket])
 
-  // Handle browser back/forward
   useEffect(() => {
-    const onPopState = () => {
-      const { bucket, path: p } = parseLocation()
-      setActiveBucket(bucket)
-      setPath(p)
+    const onPop = () => {
+      const next = parseLocation()
+      setBucket(next.bucket)
+      setPath(next.path)
+      setUi(next.ui)
     }
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
+  useEffect(() => {
+    const onKey = e => {
+      const tag = e.target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return
+      if (e.key === '?') { e.preventDefault(); setHelpOpen(o => !o) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'))
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
+    <div className="app">
       <nav className="mco-navbar">
         <a href="https://climate.umt.edu" target="_blank" rel="noopener noreferrer">
           <img className="mco-navbar-logo"
             src="https://climate.umt.edu/assets/images/MCO_logo_icon_only.png"
             alt="Montana Climate Office"
-            onError={(e) => { e.target.style.display = 'none' }} />
+            onError={e => { e.target.style.display = 'none' }} />
         </a>
         <div className="mco-navbar-divider" />
-        <div className="mco-navbar-brand">
+        <button className="mco-navbar-brand" onClick={goHome} title="All data collections">
           <span className="mco-navbar-title">MCO Data Browser</span>
           <span className="mco-navbar-subtitle">A service of the Montana Climate Office</span>
-        </div>
+        </button>
+        <button className="btn btn-quiet" onClick={() => setHelpOpen(true)}
+          title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
         <button className="mco-theme-toggle" onClick={toggleTheme}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
           aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
@@ -85,56 +136,47 @@ export default function App() {
         </button>
       </nav>
 
-      <div className="browser">
-        {!activeBucket ? (
-          <>
-            <div className="breadcrumb">
-              <span className="breadcrumb-current">/</span>
-            </div>
-            <table className="file-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th className="col-size">Size</th>
-                  <th className="col-date">Modified</th>
-                </tr>
-              </thead>
-              <tbody>
-                {BUCKETS.map(b => (
-                  <tr key={b.bucket}>
-                    <td>
-                      <div className="name-cell">
-                        <FolderIcon />
-                        <button className="folder-link"
-                          onClick={() => selectBucket(b)}>
-                          {b.label}
-                        </button>
-                      </div>
-                    </td>
-                    <td className="col-size"><span className="size-text">&mdash;</span></td>
-                    <td className="col-date"><span className="date-text">&mdash;</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        ) : (
+      <main className="browser">
+        {bucket ? (
           <FileBrowser
-            bucket={activeBucket}
+            key={bucket.label}
+            bucket={bucket}
             path={path}
             onNavigate={navigatePath}
             onHome={goHome}
+            uiState={ui}
+            setUiState={setUi}
           />
+        ) : (
+          <div className="home">
+            <header className="home-head">
+              <h1>Montana Climate Office data</h1>
+              <p>
+                Public archives of gridded climate, snow, and Mesonet observations,
+                served over HTTPS with range-request support for cloud-optimized reads.
+              </p>
+            </header>
+            <ul className="collections">
+              {BUCKETS.map(b => (
+                <li key={b.bucket}>
+                  <button className="collection" onClick={() => navigate(b, '')}>
+                    <FolderIcon className="ico ico-dir" />
+                    <span className="collection-text">
+                      <span className="collection-name">{b.label}</span>
+                      <span className="collection-desc">
+                        {b.description || `s3://${b.bucket}`}
+                      </span>
+                    </span>
+                    <code className="collection-path">/{b.label}/</code>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
-      </div>
-    </div>
-  )
-}
+      </main>
 
-function FolderIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" />
-    </svg>
+      {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
+    </div>
   )
 }

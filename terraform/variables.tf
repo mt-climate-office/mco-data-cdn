@@ -22,6 +22,7 @@ variable "origin_buckets" {
     bucket_name            = string
     bucket_regional_domain = string
     private                = optional(bool, false)
+    description            = optional(string, "")
   }))
 }
 

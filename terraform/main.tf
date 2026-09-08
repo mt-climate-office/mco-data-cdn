@@ -25,6 +25,10 @@ provider "aws" {
 }
 
 locals {
+  # The host the browser talks to: the custom domain once it is in front of
+  # the distribution, otherwise the CloudFront domain.
+  cdn_host = var.enable_custom_domain ? var.custom_domain : aws_cloudfront_distribution.data.domain_name
+
   common_tags = {
     Project   = "mco-data-cdn"
     ManagedBy = "terraform"

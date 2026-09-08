@@ -53,7 +53,17 @@ output "storage_browser_buckets_json" {
     for key, b in var.origin_buckets : {
       label  = key
       bucket = b.bucket_name
-      domain = b.bucket_regional_domain
+      # Where the browser sends ListObjectsV2. Public buckets answer directly
+      # (always fresh, and their CORS rule allows this site's origin). A
+      # private bucket has no public S3 endpoint, so it is listed through the
+      # CDN, which forwards ?list-type=2 to S3 over OAC.
+      domain      = b.private ? "${local.cdn_host}/${key}" : b.bucket_regional_domain
+      description = b.description
     }
   ])
+}
+
+output "storage_browser_cdn_base" {
+  description = "Origin the browser builds file links against"
+  value       = "https://${local.cdn_host}"
 }
