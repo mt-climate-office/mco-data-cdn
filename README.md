@@ -136,11 +136,50 @@ Then `terraform apply`. A new path prefix `/newdata/*` will be created automatic
 
 ## Cache invalidation
 
+**Invalidation paths are CACHE KEYS, not public URLs — drop the origin prefix.**
+
+`mco-strip-origin-prefix` is a **viewer-request** function, and a viewer-request
+rewrite runs *before* the cache lookup. So the object published at
+`data2.climate.umt.edu/snodas/latest/x.tif` is cached under `/latest/x.tif`,
+and that is what an invalidation is matched against.
+
+Getting this wrong **fails silently**: a wildcard that matches zero objects is
+still a successful invalidation, so CloudFront reports `Completed` and nothing
+is flushed. With `DefaultTTL` at 3600 s the stale copy ages out within the hour,
+so the mistake is invisible unless something re-publishes the same path twice in
+one hour. That is exactly how it bit the Mesonet living archive
+([mesonet-db-rds#167](https://github.com/mt-climate-office/mesonet-db-rds/issues/167)):
+a same-day repair served the superseded file through two "successful"
+invalidations.
+
 ```bash
+# Public URL:  data2.climate.umt.edu/snodas/latest/x.tif
+# Cache key:                        /latest/x.tif   <-- invalidate THIS
 aws cloudfront create-invalidation \
   --distribution-id $(terraform -chdir=terraform output -raw cdn_distribution_id) \
-  --paths "/snodas/latest/*" \
+  --paths "/latest/*" \
   --profile mco
+```
+
+Two caveats that follow from the strip:
+
+- A cache key is **shared across origins**. `/latest/*` above also matches
+  gridmet's and mesonet's `latest/` trees. The function puts the origin in an
+  `x-mco-origin` header that the cache policy includes, so the *entries* stay
+  distinct — but an invalidation path cannot see that header, so it flushes all
+  of them. Harmless, just broader than it looks.
+- `--paths "/*"` is always correct (it matches every key regardless of
+  rewriting), which is why the storage-browser deploy below needs no special
+  care.
+
+To verify a bust actually worked, compare the CDN against S3 rather than
+trusting the `Completed` status:
+
+```bash
+aws s3api head-object --bucket mco-snodas --key latest/x.tif \
+  --profile mco --query '[ContentLength,LastModified]'
+curl -sI https://data2.climate.umt.edu/snodas/latest/x.tif \
+  | grep -i 'content-length\|last-modified\|x-cache'
 ```
 
 ## Deploying the storage browser
