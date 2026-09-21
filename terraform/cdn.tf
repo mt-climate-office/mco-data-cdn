@@ -395,6 +395,14 @@ resource "aws_cloudfront_distribution" "data" {
 # For "directory" requests (no file extension), it returns a small HTML loader
 # that fetches the SPA from /index.html. The SPA reads window.location.pathname
 # and renders the file browser for that path.
+#
+# CONSEQUENCE FOR INVALIDATIONS (see README "Cache invalidation"): this is a
+# VIEWER-REQUEST function, so the rewrite happens BEFORE the cache lookup and
+# the cache key is the STRIPPED path. Invalidate "/latest/*", never
+# "/snodas/latest/*" — the prefixed form matches nothing and still reports
+# Completed, and the 3600 s TTL hides it. That silently broke every publish of
+# the Mesonet living archive until 2026-09-20
+# (mt-climate-office/mesonet-db-rds#167).
 resource "aws_cloudfront_function" "strip_prefix" {
   name    = "mco-strip-origin-prefix"
   runtime = "cloudfront-js-2.0"
