@@ -98,3 +98,15 @@ variable "acm_certificate_arn" {
   type        = string
   default     = ""
 }
+
+variable "access_log_bucket" {
+  description = "Private bucket receiving the distribution's standard (v2) access logs."
+  type        = string
+  default     = "mco-data-cdn-access-logs"
+}
+
+variable "access_log_retention_days" {
+  description = "Days to keep CloudFront access logs before expiry."
+  type        = number
+  default     = 365
+}

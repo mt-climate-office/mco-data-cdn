@@ -134,6 +134,20 @@ origin_buckets = {
 
 Then `terraform apply`. A new path prefix `/newdata/*` will be created automatically.
 
+## Access logs
+
+Standard logging (v2) delivers every request to the private bucket
+`mco-data-cdn-access-logs` as gzipped W3C files under
+`AWSLogs/<account>/CloudFront/<DistributionId>/<yyyy>/<MM>/<dd>/<HH>/`, a few
+minutes behind real time. Standard-IA at 30 days, expired at
+`access_log_retention_days` (365). Logs carry client IPs; the bucket has no
+CDN path. Defined in `terraform/logging.tf` (delivery source in us-east-1, as
+CloudFront requires). Enabled 2026-10-04 — nothing earlier was logged.
+
+```zsh
+aws s3 cp s3://mco-data-cdn-access-logs/AWSLogs/ . --recursive --profile mco
+```
+
 ## Cache invalidation
 
 **Invalidation paths are CACHE KEYS, not public URLs — drop the origin prefix.**
