@@ -11,6 +11,7 @@ A single CloudFront distribution fronts multiple S3 origin buckets using path-ba
 | `/gridmet/*` | `mco-gridmet` | GridMET drought & climate COGs |
 | `/snodas/*` | `mco-snodas` | SNODAS SWE COGs & Parquet |
 | `/mesonet/*` | `mco-mesonet` | Mesonet Parquet archive, station photos, air quality (private origin, via OAC) |
+| `/hhp/*` | `mco-hhp` | Headwaters Hydrology Project datasets (private origin, via OAC) |
 
 A CloudFront Function strips the path prefix before forwarding to S3, so `/snodas/cogs/file.tif` resolves to `s3://mco-snodas/cogs/file.tif`. Directory-like paths (no file extension) serve the storage browser SPA instead of hitting S3.
 
