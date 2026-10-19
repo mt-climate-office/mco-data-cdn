@@ -14,3 +14,9 @@ terraform/terraform.tfplan
 
 # OS
 .DS_Store
+
+# Let's Encrypt account and issued certs (scripts/renew-letsencrypt-cert.sh)
+letsencrypt/
+
+# Lambda build output (scripts/build-cert-renewer.sh)
+build/
