@@ -92,7 +92,11 @@ terraform apply
 
 ## Custom domain and SSL certificate
 
-The university's CAA records only allow Sectigo, DigiCert, and Let's Encrypt — not Amazon. Certificates are obtained through InCommon (via Internet2 membership) and manually imported into ACM.
+`climate.umt.edu` is a CNAME to GitHub Pages, so `data2` inherits GitHub's CAA
+records: Let's Encrypt, Sectigo and DigiCert only. That rules out ACM-issued
+certificates (`amazon.com`) and UM's CertiNext portal, which issues only from
+emSign (`emsign.com`). The certificate is therefore a **Let's Encrypt** cert
+imported into ACM.
 
 **All three variables must be set together** in `terraform.tfvars`:
 
@@ -102,17 +106,50 @@ enable_custom_domain = true
 acm_certificate_arn  = "arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT-ID"
 ```
 
-### Importing/renewing the certificate
+### Automatic renewal
+
+ACM never renews imported certificates, so `terraform/cert-renewal.tf` deploys a
+Lambda, `mco-data-cdn-cert-renewer` in us-east-1 (source in `cert-renewer/`). It
+runs daily at 15:00 UTC. Once the certificate has fewer than `cert_renew_days`
+(default 30) days left, it does the following:
+
+- generates a fresh key (only ACM keeps a copy)
+- orders a certificate over ACME HTTP-01
+- re-imports the certificate into the same ARN, so CloudFront picks it up
+  without a Terraform change
+
+Challenge files go in the storage browser bucket under
+`.well-known/acme-challenge/`. That path matches no `/<origin>/*` behavior, so
+the default behavior serves it. The ACME account key is the SSM SecureString
+`/mco-data-cdn/acme-account-key`.
+
+Two alarms email `cert_alert_email`. The first fires when the Lambda errors.
+The second is independent of the Lambda and fires when ACM's `DaysToExpiry`
+for the certificate drops below 14. Confirm the SNS subscription email once,
+after the first apply.
+
+`scripts/build-cert-renewer.sh` builds the Lambda package. Terraform runs it on
+every plan, so it requires `uv`.
+
+To test the deployed function without changing the live certificate, run a
+forced dry run. It issues a real certificate but does not import it:
 
 ```bash
-aws acm import-certificate --region us-east-1 --profile mco \
-  --certificate-arn <existing-arn> \
-  --certificate fileb://data2.climate.umt.edu.crt \
-  --private-key fileb://data2.climate.umt.edu.key \
-  --certificate-chain fileb://chain.crt
+aws lambda invoke --region us-east-1 --profile mco \
+  --function-name mco-data-cdn-cert-renewer \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"force": true, "dry_run": true}' /dev/stdout
 ```
 
-For first-time import, omit `--certificate-arn` and update `acm_certificate_arn` in `terraform.tfvars` with the returned ARN.
+Use `{"force": true}` to renew now. Let's Encrypt allows 5 identical
+certificates per week.
+
+**Manual fallback:** `./scripts/renew-letsencrypt-cert.sh --import` does the
+same job from a laptop with the repo's `data2.climate.umt.edu.{csr,key}`.
+
+**Retiring this:** once `data2` has its own Route 53 zone (see the `mco-dns`
+repo) with a CAA record allowing `amazon.com`, switch to an ACM-issued
+certificate, which renews itself, and delete the renewer.
 
 ### DNS
 

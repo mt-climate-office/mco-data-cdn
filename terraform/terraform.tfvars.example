@@ -31,3 +31,6 @@ origin_buckets = {
 # custom_domain        = "data2.climate.umt.edu"
 # enable_custom_domain = true
 # acm_certificate_arn  = "arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT-ID"
+
+# Certificate renewal alerts (cert-renewal.tf)
+cert_alert_email = "you@example.edu"

@@ -94,7 +94,7 @@ variable "enable_custom_domain" {
 }
 
 variable "acm_certificate_arn" {
-  description = "ARN of the ACM certificate for the custom domain. For university domains, import an InCommon/Sectigo cert via `aws acm import-certificate`."
+  description = "ARN of the ACM certificate for the custom domain. An imported certificate, kept current by the cert-renewer Lambda (cert-renewal.tf)."
   type        = string
   default     = ""
 }
@@ -109,4 +109,15 @@ variable "access_log_retention_days" {
   description = "Days to keep CloudFront access logs before expiry."
   type        = number
   default     = 365
+}
+
+variable "cert_alert_email" {
+  description = "Email for certificate renewal failures and near-expiry alerts (SNS; confirm the subscription email once)."
+  type        = string
+}
+
+variable "cert_renew_days" {
+  description = "Renew the certificate once it has fewer than this many days left."
+  type        = number
+  default     = 30
 }
