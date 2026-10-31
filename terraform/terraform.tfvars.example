@@ -15,6 +15,11 @@ origin_buckets = {
     bucket_regional_domain = "mco-snodas.s3.us-west-2.amazonaws.com"
     description            = "SNODAS snow water equivalent COGs and summaries"
   }
+  snotel = {
+    bucket_name            = "mco-snotel"
+    bucket_regional_domain = "mco-snotel.s3.us-west-2.amazonaws.com"
+    description            = "SNOTEL daily station data, SWE normals and plots"
+  }
 }
 
 # Volatile paths get short TTLs (default: 1h default, 6h max)

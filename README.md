@@ -10,6 +10,7 @@ A single CloudFront distribution fronts multiple S3 origin buckets using path-ba
 |-------------|-----------|------|
 | `/gridmet/*` | `mco-gridmet` | GridMET drought & climate COGs |
 | `/snodas/*` | `mco-snodas` | SNODAS SWE COGs & Parquet |
+| `/snotel/*` | `mco-snotel` | SNOTEL daily station data, SWE normals & plots (Parquet, PNG) |
 | `/mesonet/*` | `mco-mesonet` | Mesonet Parquet archive, station photos, air quality (private origin, via OAC) |
 | `/hhp/*` | `mco-hhp` | Headwaters Hydrology Project datasets (private origin, via OAC) |
 
