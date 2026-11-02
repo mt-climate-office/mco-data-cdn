@@ -70,6 +70,40 @@ variable "volatile_exact_paths" {
   default     = []
 }
 
+variable "volatile_layout_paths" {
+  description = <<-EOT
+    Full distribution path patterns (wildcards allowed, leading /<origin_key>/
+    required) for trees that are rewritten in place daily, so they get the
+    short-TTL volatile cache policy instead of the archival one.
+
+    Unlike volatile_exact_paths, which lives in each deployment's tfvars, this
+    list describes the snow buckets' published layout, so its default is
+    committed here. Patterns whose origin key is not in origin_buckets are
+    skipped.
+
+    The default covers layout v1 of mco-snodas and mco-snotel (mco-snotel
+    docs/bucket-layout.md): the latest/ trees, the current-season tables that
+    are overwritten each day, the SNOTEL station table, and the SNOTEL raw
+    archive split by water year (the current year's file is rewritten
+    nightly; past years are small and rarely read, so one wildcard is cheaper
+    than a behavior that must be edited every October). Dated trees (raw COGs,
+    normals, plots, daily percentile grids) are immutable and keep the
+    archival TTL. Each entry is one cache behavior; the account's CloudFront
+    quota is 75 per distribution.
+  EOT
+  type        = list(string)
+  default = [
+    "/snodas/gridded/daily/latest/*",
+    "/snodas/zonal/daily/latest/*",
+    "/snodas/zonal/daily/means/*",
+    "/snodas/zonal/daily/percentiles/*",
+    "/snotel/daily/latest/*",
+    "/snotel/daily/percentiles/*",
+    "/snotel/raw/*",
+    "/snotel/stations.parquet",
+  ]
+}
+
 variable "listing_ttl" {
   description = <<-EOT
     Cache TTL in seconds for S3 ListObjectsV2 responses served through the CDN

@@ -73,12 +73,37 @@ Terraform outputs.
 - **HTTP/2 + HTTP/3** — modern transport
 - **Compression** — Brotli and gzip
 - **Tiered caching** — short TTL for volatile paths (e.g. `latest/`), long TTL for archival data
+  (see [Volatile paths](#volatile-paths))
 - **Per-origin cache keys** — the prefix-stripping CloudFront function runs
   before the cache lookup, so `/gridmet/raw/x` and `/snodas/raw/x` both become
   `/raw/x`. The cache key covers the distribution and URI but not the cache
   behavior or origin, so the function stamps an `x-mco-origin` header that both
   cache policies include in the key. Without it, two buckets sharing a key path
   share one cached object.
+
+### Volatile paths
+
+Every path gets the archival cache policy (1 day default, 7 days max) unless a
+volatile behavior matches it first; those get the volatile policy (1 hour
+default, 6 hours max). Three variables add volatile behaviors, each entry one
+cache behavior:
+
+| Variable | Set in | Matches |
+|----------|--------|---------|
+| `volatile_path_patterns` | default `["latest"]` | `/<key>/latest/*` for every origin |
+| `volatile_exact_paths` | `terraform.tfvars` | single objects, e.g. `/mesonet/photos/manifest.parquet` |
+| `volatile_layout_paths` | default in `variables.tf` | the snow buckets' layout v1 trees rewritten daily |
+
+`volatile_layout_paths` covers `gridded/daily/latest/`, `zonal/daily/latest/`,
+`zonal/daily/means/` and `zonal/daily/percentiles/` in mco-snodas, and
+`daily/latest/`, `daily/percentiles/`, `raw/` and `stations.parquet` in
+mco-snotel (layout spec: mco-snotel `docs/bucket-layout.md`). Every other v1
+tree is dated and immutable.
+
+The account's quota is 75 cache behaviors per distribution (Service Quotas,
+`cloudfront`, "Cache behaviors per distribution"; it was 25 for years, so older
+docs say 25). Count them before adding more: `terraform state show aws_cloudfront_distribution.data |
+grep -c path_pattern`.
 
 ## Setup
 
