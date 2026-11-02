@@ -343,6 +343,34 @@ resource "aws_cloudfront_distribution" "data" {
     }
   }
 
+  # Volatile trees of the snow buckets' published layout (e.g.
+  # /snodas/zonal/daily/latest/*, /snotel/stations.parquet) — short TTL. Like
+  # the blocks above, these must precede /<key>/*. None of them overlaps an
+  # exact path or a /<key>/latest/* pattern, so their place among those does
+  # not matter.
+  dynamic "ordered_cache_behavior" {
+    for_each = {
+      for p in var.volatile_layout_paths : p => split("/", trimprefix(p, "/"))[0]
+      if contains(keys(var.origin_buckets), split("/", trimprefix(p, "/"))[0])
+    }
+    content {
+      path_pattern           = ordered_cache_behavior.key
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD"]
+      target_origin_id       = ordered_cache_behavior.value
+      viewer_protocol_policy = "redirect-to-https"
+      compress               = true
+
+      cache_policy_id            = aws_cloudfront_cache_policy.volatile.id
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.cors.id
+
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.strip_prefix.arn
+      }
+    }
+  }
+
   # General path per origin: /<key>/* — long TTL for archival data
   dynamic "ordered_cache_behavior" {
     for_each = var.origin_buckets
